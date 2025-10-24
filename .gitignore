@@ -135,6 +135,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
+.idea
 .env
 .envrc
 .venv
@@ -205,3 +206,5 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+pc_app/config.json
