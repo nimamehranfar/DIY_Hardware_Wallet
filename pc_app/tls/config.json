@@ -1,0 +1,8 @@
+{
+  "sender_public_key": "A1B2C3D4E5F6G7H8",
+  "rpc_url": "https://api.devnet.solana.com",
+  "recipient_public_key": "",
+  "lamports": 1000000,
+  "esp32_host": "0.0.0.0",
+  "esp32_port": 8443
+}

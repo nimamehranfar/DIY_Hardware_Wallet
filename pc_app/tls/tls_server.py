@@ -1,29 +1,99 @@
-import socket
-import ssl
+import socket, ssl, json, os, sys, traceback
+from pc_app.tls.update_config import write_sender_pubkey
 
-HOST = "0.0.0.0"
-PORT = 8443
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(HERE)
+
+HOST, PORT = "0.0.0.0", 8443
 
 context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+context.load_cert_chain(
+    certfile=os.path.join(HERE, "server.crt"),
+    keyfile=os.path.join(HERE, "server.key")
+)
+context.verify_mode = ssl.CERT_NONE  # server-only TLS
 
-# Load only server certificate & key
-context.load_cert_chain(certfile="server.crt", keyfile="server.key")
 
-# IMPORTANT: Do NOT require client certificate
-context.verify_mode = ssl.CERT_NONE  # This avoids SSLV3_ALERT_BAD_CERTIFICATE
+def recv_line(conn, timeout=5):
+    """Read one line (terminated by \\n) with a timeout."""
+    conn.settimeout(timeout)
+    buf = b""
+    while True:
+        try:
+            bch = conn.recv(1)
+        except socket.timeout:
+            return None
+        if not bch:
+            return None
+        buf += bch
+        if bch == b"\n":
+            break
+    try:
+        msg = buf.decode().strip()
+        return json.loads(msg)
+    except json.JSONDecodeError:
+        return msg
 
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0) as sock:
-    sock.bind((HOST, PORT))
-    sock.listen(5)
-    print(f"Listening on {HOST}:{PORT} (TLS enabled)")
 
-    with context.wrap_socket(sock, server_side=True) as ssock:
+def handle_client(conn, addr):
+    print(f"[+] Connected: {addr}")
+    try:
+        # ---- 1. Expect handshake ----
+        first = recv_line(conn)
+        if not first:
+            print("[-] Empty handshake")
+            return
+        if (isinstance(first, str) and "ping" in first) or \
+                (isinstance(first, dict) and first.get("action") == "ping"):
+            conn.sendall(b'{"status":"pong"}\n')
+            print("[Handshake] pong sent")
+        else:
+            print("[-] Unexpected first message:", first)
+            return
+
+        # ---- 2. Wait for next message (pubkey etc.) ----
+        print("[*] Waiting for next payload...")
+        second = recv_line(conn, timeout=10)
+        if not second:
+            print("[-] No second message received")
+            return
+
+        print("[>] Received:", second)
+        if isinstance(second, dict) and second.get("action") == "pubkey":
+            pub = second.get("pubkey", "")
+            if not pub:
+                conn.sendall(b'{"status":"error","reason":"missing pubkey"}\n')
+                return
+            write_sender_pubkey(pub)
+            conn.sendall(b'{"status":"ok","saved":true}\n')
+            print(f"[✔] Saved pubkey {pub[:12]}...")
+        else:
+            conn.sendall(b'{"status":"error","reason":"unknown action"}\n')
+
+    except Exception as e:
+        print("[!] Client error:", e)
+        traceback.print_exc()
+    finally:
+        conn.close()
+        print("[x] Connection closed:", addr)
+
+
+def main():
+    print(f"[*] Listening on {HOST}:{PORT} (TLS)")
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind((HOST, PORT))
+        sock.listen(5)
         while True:
-            conn, addr = ssock.accept()
-            print("ESP32 connected:", addr)
+            raw_conn, addr = sock.accept()
+            try:
+                conn = context.wrap_socket(raw_conn, server_side=True)
+                handle_client(conn, addr)
+            except ssl.SSLError as e:
+                print("[SSL]", e)
+            except Exception as e:
+                print("[!] General:", e)
+                traceback.print_exc()
 
-            data = conn.recv(1024).decode()
-            print("Received:", data)
-
-            conn.sendall(b"world\n")
-            conn.close()
+if __name__ == "__main__":
+    main()

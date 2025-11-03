@@ -3,9 +3,9 @@
 #include "rootCA.h"
 
 const char* WIFI_SSID = "iPhone";     // Rename hotspot to remove apostrophe
-const char* WIFI_PASS = "bigmannet32";
+const char* WIFI_PASS = "Ahmad123";
 
-const char* SERVER_HOST = "172.20.10.10";  // PC Hotspot default IP
+const char* SERVER_HOST = "172.20.10.10";  // PC default IP
 const uint16_t SERVER_PORT = 8443;
 
 WiFiClientSecure client;
@@ -33,6 +33,15 @@ void setup() {
   Serial.println("\n✅ WiFi Connected!");
   Serial.print("IP Address: ");
   Serial.println(WiFi.localIP());
+  Serial.println(WiFi.gatewayIP());
+  Serial.println(WiFi.subnetMask());
+  IPAddress serverIP;
+  if (WiFi.hostByName("NM.local", serverIP)) {
+    Serial.print("Resolved NM.local to: ");
+    Serial.println(serverIP);
+  } else {
+    Serial.println("Failed to resolve NM.local");
+  }
 
   // ✅ Use Root CA from file
   client.setCACert(ROOT_CA);
