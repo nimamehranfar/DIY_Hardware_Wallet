@@ -1,9 +1,10 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include "PasswordHandler.h"   // unchanged
-#include "TLSClient.h"         // unchanged
-#include "USBComm.h"           // new
+#include "PasswordHandler.h"
+#include "TLSClient.h"
+// #include "USBComm.h"
+#include "USBComm_ECDH.h"
 
 #define OLED_ADDR 0x3C
 #define SCREEN_WIDTH 128
@@ -89,23 +90,18 @@ void setup() {
 
   // 2) Select transport
   showOLED(display, "Choose I/O...");
-  delay(600);
+  delay(500);
   Transport t = selectTransport();
 
   // 3) Run transport
-  if (t == TRANS_WIFI) {
+  if (t==TRANS_WIFI) {
     showOLED(display, "WiFi selected");
-    delay(500);
-    bool tlsOK = connectTLS(display);          // unchanged function
-    if (tlsOK) showOLED(display, "TLS OK!", "Secure ✅");
-    else       showOLED(display, "TLS Failed!", "Check server");
+    bool ok = connectTLS(display);
+    showOLED(display, ok? "TLS OK":"TLS Failed");
   } else {
     showOLED(display, "USB selected");
-    delay(500);
-    // Use USB pairing + AES channel
-    bool ok = runUSBPairingAndEnc(display);    // implemented in USBComm.h
-    if (ok) showOLED(display, "USB Enc OK", "Secure ✅");
-    else    showOLED(display, "USB Enc Err", "Retry");
+    bool ok = runUSBECDH(display);   // NEW secure ECDH path
+    showOLED(display, ok? "USB OK":"USB error");
   }
 }
 

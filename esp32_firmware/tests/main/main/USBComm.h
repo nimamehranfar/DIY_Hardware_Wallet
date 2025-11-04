@@ -153,7 +153,12 @@ static void deriveKeyFromPINAndSeed(uint8_t key[32], const String &pinString, co
 static bool runUSBPairingAndEnc(Adafruit_SSD1306 &disp) {
   (void)disp;
   usb_oled("USB mode", "Waiting...");
-  Serial.println("USB_READY");
+  // keep announcing every 2 seconds until host responds
+  while (true) {
+    Serial.println("USB_READY");
+    delay(2000);
+    if (Serial.available()) break;     // stop once host starts sending
+  }
 
   // Expect {"action":"pair","seed":"...","proof":"<hex>"}
   String line;
