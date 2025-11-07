@@ -6,6 +6,7 @@ from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives import hashes
 
+
 try:
     from Crypto.Cipher import AES
 except Exception:
@@ -33,6 +34,24 @@ def open_serial(port: str, baud: int = 115200, timeout: float = 2.0) -> serial.S
     ser.reset_input_buffer()
     return ser
 
+def read_json_line(ser, timeout=10):
+    start = time.time()
+    buf = ""
+    while time.time() - start < timeout:
+        if ser.in_waiting:
+            ch = ser.read().decode(errors="ignore")
+            if ch == "\n":
+                line = buf.strip()
+                if line.startswith("{") and line.endswith("}"):
+                    return json.loads(line)
+                buf = ""
+            else:
+                buf += ch
+        else:
+            time.sleep(0.02)
+    raise TimeoutError("No JSON response from ESP")
+
+
 def run():
     port = input("Enter serial port (e.g., COM5 or /dev/ttyUSB0): ").strip()
     ser = open_serial(port)
@@ -54,14 +73,27 @@ def run():
             break
 
     # 2) Send PC public key
-    send = json.dumps({"action":"pc_pub","pub":pc_pub_hex})
+    send = json.dumps({"action":"pc_pub","pc_pub":pc_pub_hex})
     ser.write((send + "\n").encode())
     print("[PC] → Sent pc_pub")
 
     # 3) Receive wallet_pub + pairing code
-    resp = ser.readline().decode(errors="ignore").strip()
-    print("[ESP]", resp or "<no response>")
+    print("[*] Waiting for wallet_pub JSON from ESP...")
+    resp = ""
+    start = time.time()
+    while time.time() - start < 15:
+        line = ser.readline().decode(errors="ignore").strip()
+        if not line:
+            continue
+        print("[ESP]", line)
+        if line.startswith("{") and line.endswith("}"):
+            resp = line
+            break
+    else:
+        raise TimeoutError("No JSON from ESP after sending pc_pub")
+
     data = json.loads(resp)
+
     if data.get("status") != "ok" or "wallet_pub" not in data or "code" not in data:
         print("[!] Unexpected response:", data)
         return

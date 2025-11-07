@@ -122,7 +122,7 @@ def main(SERIAL_PORT = "COM5",BAUD_RATE = 115200,CONFIG = "config.json"):
                     "pc_public_key_uncompressed_hex": pc_public_bytes65.hex().upper(),
                     "shared_secret_hex": shared_secret.hex().upper()
                 }
-                with open("config.json", "w") as f:
+                with open("../config.json", "w") as f:
                     json.dump(data, f, indent=2)
                 print("Saved config.json")
 

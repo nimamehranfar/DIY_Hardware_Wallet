@@ -31,7 +31,7 @@ def attach_signature_and_broadcast(client, msg, sender, signature_bytes):
     return res
 
 def main():
-    with open("config.json","r") as f:
+    with open("../config.json", "r") as f:
         cfg = json.load(f)
     rpc_url = cfg["rpc_url"]
     sender = cfg["sender_public_key"]
