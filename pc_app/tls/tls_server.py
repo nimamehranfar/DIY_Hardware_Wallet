@@ -95,5 +95,15 @@ def main():
                 print("[!] General:", e)
                 traceback.print_exc()
 
+def run_wifi():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind((HOST, PORT))
+    sock.listen(1)
+    raw_conn, addr = sock.accept()
+    conn = context.wrap_socket(raw_conn, server_side=True)
+    print(f"[+] TLS client {addr} connected")
+    return conn
+
 if __name__ == "__main__":
     main()

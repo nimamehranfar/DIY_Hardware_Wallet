@@ -113,8 +113,19 @@ static String jfield(const String&s,const char*k){
   return s.substring(q1+1,q2);
 }
 
+struct USBSession {
+  bool ok;
+  uint8_t aesKey[32];
+};
+
+USBSession returnFalse(){
+  USBSession sess;
+  sess.ok = false;
+  return sess;
+}
+
 // ---------- main ----------
-static bool runUSBECDH(Adafruit_SSD1306 &disp){
+USBSession runUSBECDH(Adafruit_SSD1306 &disp){
   pinMode(BTN_CONFIRM,INPUT_PULLUP);
   pinMode(BTN_DENY,INPUT_PULLUP);
   oled("USB mode","Waiting...");
@@ -141,13 +152,13 @@ static bool runUSBECDH(Adafruit_SSD1306 &disp){
                                  (const unsigned char*)pers, strlen(pers));
   if(rc!=0){
     Serial.printf("{\"status\":\"error\",\"reason\":\"drbg_seed\",\"code\":%d}\n",rc);
-    oled("Seed fail"); return false;
+    oled("Seed fail"); return returnFalse();
   }
 
   rc = mbedtls_ecdh_setup(&ctx, MBEDTLS_ECP_DP_SECP256R1);
   if(rc!=0){
     Serial.printf("{\"status\":\"error\",\"reason\":\"ecdh_setup\",\"code\":%d}\n",rc);
-    oled("Setup fail"); return false;
+    oled("Setup fail"); return returnFalse();
   }
 
   // Make public in TLS ECPoint format: [len=65][0x04||X||Y]
@@ -160,11 +171,11 @@ static bool runUSBECDH(Adafruit_SSD1306 &disp){
                                 &drbg);
   if(rc!=0){
     Serial.printf("{\"status\":\"error\",\"reason\":\"make_public\",\"code\":%d}\n",rc);
-    oled("Pub fail"); return false;
+    oled("Pub fail"); return returnFalse();
   }
   if(my_pub_tls_len < 2 || my_pub_tls[0] != 65 || my_pub_tls[1] != 0x04){
     Serial.println("{\"status\":\"error\",\"reason\":\"pub_format\"}");
-    oled("Pub fmt"); return false;
+    oled("Pub fmt"); return returnFalse();
   }
   uint8_t my_pub_raw[65];
   memcpy(my_pub_raw, &my_pub_tls[1], 65);
@@ -173,13 +184,13 @@ static bool runUSBECDH(Adafruit_SSD1306 &disp){
   String ln;
   if(!serialLine(ln, 15000)){
     Serial.println("{\"status\":\"error\",\"reason\":\"timeout_pc_pub\"}");
-    oled("No PC pub"); return false;
+    oled("No PC pub"); return returnFalse();
   }
   String pc_hex = jfield(ln,"pub"); if(pc_hex=="") pc_hex = jfield(ln,"pc_pub");
   uint8_t pc_pub_raw[65];
   if(fromHex(pc_hex, pc_pub_raw, sizeof(pc_pub_raw)) != 65 || pc_pub_raw[0] != 0x04){
     Serial.println("{\"status\":\"error\",\"reason\":\"pc_pub_hex\"}");
-    oled("PC bad"); return false;
+    oled("PC bad"); return returnFalse();
   }
   // Wrap to TLS ECPoint for mbedtls_ecdh_read_public
   uint8_t pc_pub_tls[66]; pc_pub_tls[0]=65; memcpy(pc_pub_tls+1, pc_pub_raw, 65);
@@ -187,7 +198,7 @@ static bool runUSBECDH(Adafruit_SSD1306 &disp){
   rc = mbedtls_ecdh_read_public(&ctx, pc_pub_tls, sizeof(pc_pub_tls));
   if(rc!=0){
     Serial.printf("{\"status\":\"error\",\"reason\":\"read_public\",\"code\":%d}\n",rc);
-    oled("Read fail"); return false;
+    oled("Read fail"); return returnFalse();
   }
 
   // Shared secret
@@ -196,7 +207,7 @@ static bool runUSBECDH(Adafruit_SSD1306 &disp){
                                 mbedtls_ctr_drbg_random, &drbg);
   if(rc!=0 || slen!=32){
     Serial.printf("{\"status\":\"error\",\"reason\":\"secret\",\"code\":%d}\n",rc);
-    oled("Secret fail"); return false;
+    oled("Secret fail"); return returnFalse();
   }
 
   // Pair code = SHA256(shared || my_pub_raw || pc_pub_raw) % 1e6
@@ -222,11 +233,11 @@ static bool runUSBECDH(Adafruit_SSD1306 &disp){
     }
     if(digitalRead(BTN_DENY)==LOW){
       Serial.println("{\"action\":\"user\",\"decision\":\"deny\"}");
-      oled("Denied"); return false;
+      oled("Denied"); return returnFalse();
     }
     if(millis()-t0>60000){
       Serial.println("{\"action\":\"user\",\"decision\":\"timeout\"}");
-      oled("Timeout"); return false;
+      oled("Timeout"); return returnFalse();
     }
     delay(10);
   }
@@ -243,18 +254,18 @@ static bool runUSBECDH(Adafruit_SSD1306 &disp){
   String msg;
   if(!serialLine(msg,12000)){
     Serial.println("{\"status\":\"error\",\"reason\":\"no_enc_msg\"}");
-    return false;
+    return returnFalse();
   }
   String ivHex = jfield(msg,"iv");
   String plain = jfield(msg,"plain");
   if(ivHex.length()!=32 || plain==""){
     Serial.println("{\"status\":\"error\",\"reason\":\"enc_fields\"}");
-    return false;
+    return returnFalse();
   }
   uint8_t iv[16];
   if(fromHex(ivHex, iv, 16) != 16){
     Serial.println("{\"status\":\"error\",\"reason\":\"iv_hex\"}");
-    return false;
+    return returnFalse();
   }
   std::string in(plain.c_str());
   std::string out(in.size(), '\0');
@@ -269,7 +280,10 @@ static bool runUSBECDH(Adafruit_SSD1306 &disp){
   mbedtls_ecdh_free(&ctx);
   mbedtls_ctr_drbg_free(&drbg);
   mbedtls_entropy_free(&ent);
-  return true;
+  USBSession sess;
+  sess.ok = true;
+  memcpy(sess.aesKey, aesKey, 32); // your computed AES key
+  return sess;
 }
 
 #endif

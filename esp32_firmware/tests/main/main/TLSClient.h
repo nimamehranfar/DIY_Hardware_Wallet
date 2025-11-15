@@ -25,7 +25,7 @@ void waitForWiFi(Adafruit_SSD1306 &display) {
   showOLED(display, "WiFi OK!", WiFi.localIP().toString());
 }
 
-bool connectTLS(Adafruit_SSD1306 &display) {
+WiFiClientSecure* connectTLS(Adafruit_SSD1306 &display) {
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
 
@@ -37,7 +37,7 @@ bool connectTLS(Adafruit_SSD1306 &display) {
   }
   if (WiFi.status() != WL_CONNECTED) {
     showOLED(display, "WiFi Failed!");
-    return false;
+    return nullptr;
   }
 
   showOLED(display, "WiFi OK!", WiFi.localIP().toString());
@@ -106,7 +106,7 @@ bool connectTLS(Adafruit_SSD1306 &display) {
       showOLED(display, "Server:", resp);
       delay(2000);
       client.stop();
-      return true;
+      return &client;
     } else {
       showOLED(display, "No reply", "Retry...");
       client.stop();
@@ -115,7 +115,7 @@ bool connectTLS(Adafruit_SSD1306 &display) {
   }
 
   showOLED(display, "TLS Failed", "Aborting");
-  return false;
+  return nullptr;
 }
 
 

@@ -52,7 +52,7 @@ def read_json_line(ser, timeout=10):
     raise TimeoutError("No JSON response from ESP")
 
 
-def run():
+def run_usb():
     port = input("Enter serial port (e.g., COM5 or /dev/ttyUSB0): ").strip()
     ser = open_serial(port)
 
@@ -156,6 +156,7 @@ def run():
     dec = cipher.decrypt(cbytes)
     print("[OK] Decrypted echo:", dec.decode(errors="ignore"))
     print("[✔] USB ECDH/AES link verified.")
+    return ser, aes_key
 
 if __name__ == "__main__":
-    run()
+    run_usb()

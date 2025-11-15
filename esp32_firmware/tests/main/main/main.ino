@@ -5,6 +5,9 @@
 #include "TLSClient.h"
 // #include "USBComm.h"
 #include "USBComm_ECDH.h"
+#include "wallet_handler.h"
+#include "secure_channel.h"
+
 
 #define OLED_ADDR 0x3C
 #define SCREEN_WIDTH 128
@@ -94,15 +97,28 @@ void setup() {
   Transport t = selectTransport();
 
   // 3) Run transport
-  if (t==TRANS_WIFI) {
-    showOLED(display, "WiFi selected");
-    bool ok = connectTLS(display);
-    showOLED(display, ok? "TLS OK":"TLS Failed");
+  if (t == TRANS_WIFI) {
+    WiFiClientSecure *client = connectTLS(display);
+    showOLED(display, client ? "TLS OK" : "TLS Failed");
+    if (client) {
+      // WiFi path
+      PlainChannel ch(*client);
+      walletServe(ch);
+      client->stop();
+    }
   } else {
     showOLED(display, "USB selected");
-    bool ok = runUSBECDH(display);   // NEW secure ECDH path
-    showOLED(display, ok? "USB OK":"USB error");
+    USBSession sess = runUSBECDH(display);
+    showOLED(display, sess.ok ? "USB OK" : "USB error");
+    if (sess.ok) {
+      // USB path
+      SecureChannel sch(Serial);
+      if (sch.begin(sess.aesKey, 32)) {
+        walletServe(sch);
+      }
+    }
   }
+
 }
 
 void loop() {
