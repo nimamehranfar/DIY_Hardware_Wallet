@@ -208,6 +208,7 @@ marimo/_lsp/
 __marimo__/
 
 pc_app/config.json
+pc_app/trusted_devices.json
 *.key
 *.crt
 *.pem

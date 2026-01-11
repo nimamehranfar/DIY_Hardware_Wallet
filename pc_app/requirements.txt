@@ -1,4 +1,19 @@
-solana==0.30.2
-solders==0.18.1
-base58
-httpx
+# espresSol PC App - Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# Solana SDK
+solders>=0.18.0
+solana>=0.30.0
+
+# Cryptography
+pycryptodome>=3.19.0
+ecdsa>=0.18.0
+
+# Serial communication (USB)
+pyserial>=3.5
+
+# Base58 encoding
+base58>=2.1.1
+
+# Optional: Colorful terminal output
+colorama>=0.4.6

@@ -82,6 +82,13 @@ class SecureChannel:
 
     def send_json(self, obj: dict):
         data = json.dumps(obj, separators=(",",":")).encode("utf-8")
+        
+        # If key is all zeros, send plain JSON (before key exchange)
+        if self.key == b"\x00" * len(self.key):
+            self.t.write(data + b"\n")
+            return
+        
+        # Otherwise, send encrypted
         nonce, ct, tag = self._enc(data)
         frame = base64.b64encode(nonce + ct + tag)
         self.t.write(b"ENC:" + frame + b"\n")
@@ -90,17 +97,27 @@ class SecureChannel:
         start = time.time()
         while True:
             if timeout and (time.time() - start) > timeout:
-                raise TimeoutError("secure recv timeout")
+                raise TimeoutError("timed out")
             line = self.t.readline()
             if not line:
                 continue
             line = line.strip()
-            if not line.startswith(b"ENC:"):
+            if not line:
                 continue
-            raw = base64.b64decode(line[4:])
-            if len(raw) < 12+16:
-                continue
-            nonce, rest = raw[:12], raw[12:]
-            ct, tag = rest[:-16], rest[-16:]
-            pt = self._dec(nonce, ct, tag)
-            return json.loads(pt.decode("utf-8"))
+            
+            # Check if encrypted (ENC: prefix)
+            if line.startswith(b"ENC:"):
+                raw = base64.b64decode(line[4:])
+                if len(raw) < 12+16:
+                    continue
+                nonce, rest = raw[:12], raw[12:]
+                ct, tag = rest[:-16], rest[-16:]
+                pt = self._dec(nonce, ct, tag)
+                return json.loads(pt.decode("utf-8"))
+            
+            # Otherwise, try to parse as plain JSON (for initial handshake)
+            try:
+                return json.loads(line.decode("utf-8"))
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                continue  # Not valid JSON, keep waiting
+
